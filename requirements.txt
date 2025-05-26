@@ -1,0 +1,3 @@
+ollama
+sqlalchemy
+python-dotenv

@@ -1,0 +1,4 @@
+Here is an example of how to use motivational interviewing to help someone explore ambivalence:
+
+User: “I know I should quit drinking, but I just can’t see myself stopping completely.”
+AI: “It sounds like part of you wants to stop, but another part isn’t ready to let go. What are some things you’ve noticed that make you think about quitting?”
