@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empathetic AI - CBT Assistant</title>
+    <!-- Add Marked.js for markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            margin-bottom: 10px;
+            font-size: 1.8em;
+        }
+
+        .chat-header p {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .session-selector {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .session-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .session-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .session-btn.with-personalization {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .session-btn.without-personalization {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            color: #8b4513;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.ai {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 15px 20px;
+            border-radius: 20px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.ai .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e9ecef;
+            border-bottom-left-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Style for personalization references in AI messages */
+        .message.ai .message-content strong {
+            color: #667eea;
+            font-weight: 700;
+            background: rgba(102, 126, 234, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* Better styling for lists in AI messages */
+        .message.ai .message-content ul,
+        .message.ai .message-content ol {
+            margin: 15px 0;
+            padding-left: 35px;
+        }
+
+        .message.ai .message-content li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        /* Better bullet points for regular AI messages */
+        .message.ai .message-content ul li {
+            list-style-type: disc;
+            margin-left: 0;
+        }
+
+        .message.ai .message-content ol li {
+            list-style-type: decimal;
+            margin-left: 0;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            font-size: 14px;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .message.ai .message-avatar {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .chat-input-form {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .chat-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-btn {
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            min-width: 80px;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 20px;
+            color: #666;
+            font-style: italic;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #667eea;
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .session-status {
+            padding: 10px 20px;
+            background: #d4edda;
+            color: #155724;
+            border-bottom: 1px solid #c3e6cb;
+            text-align: center;
+            display: none;
+        }
+
+        .download-container {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(23, 162, 184, 0.3);
+            display: none;
+            z-index: 1000;
+            max-width: 280px;
+            animation: slideInFromRight 0.4s ease-out;
+        }
+
+        @keyframes slideInFromRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .download-container p {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .download-btn {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            width: 100%;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .download-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 255, 255, 0.2);
+            text-decoration: none;
+            color: white;
+        }
+
+        .download-btn:active {
+            transform: translateY(0);
+        }
+
+        .download-close {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s ease;
+        }
+
+        .download-close:hover {
+            color: white;
+        }
+
+        .phase-indicator {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+
+        /* Special styling for CBT Formulation */
+        .message.ai .message-content.formulation {
+            max-width: 90%;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border: 2px solid #667eea;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.15);
+            font-family: 'Georgia', serif;
+            line-height: 1.7;
+        }
+
+        .formulation h1, .formulation h2, .formulation h3 {
+            color: #667eea;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .formulation h1 {
+            font-size: 1.4em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
+
+        .formulation h2 {
+            font-size: 1.2em;
+            margin-top: 25px;
+        }
+
+        .formulation h3 {
+            font-size: 1.1em;
+            margin-top: 20px;
+        }
+
+        .formulation strong {
+            color: #495057;
+            font-weight: 700;
+        }
+
+        .formulation ul, .formulation ol {
+            margin: 15px 0;
+            padding-left: 40px;
+        }
+
+        .formulation li {
+            margin-bottom: 10px;
+            color: #495057;
+            line-height: 1.6;
+        }
+
+        /* Better bullet point styling for formulations */
+        .formulation ul li {
+            list-style-type: disc;
+            margin-left: 0;
+        }
+
+        .formulation ol li {
+            list-style-type: decimal;
+            margin-left: 0;
+        }
+
+        /* Nested lists in formulations */
+        .formulation ul ul, .formulation ol ol, .formulation ul ol, .formulation ol ul {
+            margin: 8px 0;
+            padding-left: 25px;
+        }
+
+        .formulation p {
+            margin-bottom: 15px;
+            color: #495057;
+            text-align: justify;
+        }
+
+        .formulation blockquote {
+            border-left: 4px solid #667eea;
+            margin: 20px 0;
+            padding-left: 20px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 5px;
+            padding: 15px 20px;
+            font-style: italic;
+        }
+
+        .formulation code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            border: 1px solid #e9ecef;
+        }
+
+        .formulation .formulation-header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 25px 0 25px 0;
+            border-bottom: 3px solid #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.05) 100%);
+            border-radius: 10px 10px 0 0;
+            margin: -25px -25px 40px -25px;
+            position: relative;
+        }
+
+        .formulation .formulation-header::after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 0 0 3px 3px;
+        }
+
+        .formulation .formulation-title {
+            font-size: 2.2em;
+            color: #667eea;
+            font-weight: 900;
+            margin-bottom: 8px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            text-shadow: 2px 2px 4px rgba(102, 126, 234, 0.2);
+            letter-spacing: 1px;
+        }
+
+        .formulation .formulation-subtitle {
+            color: #6c757d;
+            font-size: 1em;
+            font-style: italic;
+            margin-bottom: 35px;
+            font-weight: 500;
+        }
+
+        /* Special formatting for key sections */
+        .formulation .section-thoughts {
+            background: rgba(255, 193, 7, 0.1);
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .formulation .section-emotions {
+            background: rgba(220, 53, 69, 0.1);
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .formulation .section-behaviors {
+            background: rgba(40, 167, 69, 0.1);
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .formulation .section-patterns {
+            background: rgba(102, 126, 234, 0.1);
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        /* Special styling for therapeutic pathways section */
+        .formulation .section-pathways {
+            background: rgba(40, 167, 69, 0.15);
+            border-left: 4px solid #28a745;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid rgba(40, 167, 69, 0.2);
+        }
+
+        .formulation .section-pathways h2,
+        .formulation .section-pathways h3 {
+            color: #28a745;
+            margin-top: 10px;
+        }
+
+        .formulation .section-pathways strong {
+            color: #1e7e34;
+            font-weight: 700;
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                width: 95%;
+                height: 95vh;
+                border-radius: 10px;
+            }
+
+            .session-selector {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .message-content {
+                max-width: 85%;
+            }
+
+            .chat-header h1 {
+                font-size: 1.5em;
+            }
+
+            /* Mobile adjustments for formulation */
+            .message.ai .message-content.formulation {
+                max-width: 95%;
+                padding: 20px;
+                font-size: 14px;
+            }
+
+            .formulation .formulation-title {
+                font-size: 1.3em;
+            }
+
+            .formulation h1 {
+                font-size: 1.2em;
+            }
+
+            .formulation h2 {
+                font-size: 1.1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🧠 Empathetic AI Assistant</h1>
+            <p>CBT-Informed Support & Assessment</p>
+            <div class="phase-indicator" id="phaseIndicator" style="display: none;">Phase: Introduction</div>
+        </div>
+
+        <div class="session-selector" id="sessionSelector">
+            <button class="session-btn with-personalization" onclick="startSession('with_personalization')">
+                ✨ With Personalization
+                <br><small>References previous patterns</small>
+            </button>
+            <button class="session-btn without-personalization" onclick="startSession('without_personalization')">
+                📋 Pure CBT Assessment
+                <br><small>Structured questions only</small>
+            </button>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai">
+                <div class="message-avatar">AI</div>
+                <div class="message-content">
+                    Welcome! Please choose your session type above to begin your CBT assessment.
+                </div>
+            </div>
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="message-avatar">AI</div>
+            <span>AI is thinking</span>
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+
+        <div class="chat-input-container">
+            <form class="chat-input-form" id="chatForm">
+                <input type="text" class="chat-input" id="messageInput" placeholder="Type your message here..." disabled>
+                <button type="submit" class="send-btn" id="sendBtn" disabled>Send</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="download-container" id="downloadContainer">
+        <p>Download your conversation report</p>
+        <a href="#" class="download-btn" id="downloadBtn">Download</a>
+        <button class="download-close" id="downloadClose">✗</button>
+    </div>
+
+    <script>
+        let sessionActive = false;
+        let sessionType = null;
+
+        // DOM elements
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatForm = document.getElementById('chatForm');
+        const sessionSelector = document.getElementById('sessionSelector');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const phaseIndicator = document.getElementById('phaseIndicator');
+        const downloadContainer = document.getElementById('downloadContainer');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const downloadClose = document.getElementById('downloadClose');
+
+        async function startSession(personalizationType) {
+            try {
+                sessionType = personalizationType;
+                
+                const response = await fetch('/start_session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        personalization_type: personalizationType
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    sessionActive = true;
+                    
+                    // Hide session selector and show status
+                    sessionSelector.style.display = 'none';
+                    
+                    // Hide download container if visible
+                    downloadContainer.style.display = 'none';
+                    
+                    // Enable input
+                    messageInput.disabled = false;
+                    sendBtn.disabled = false;
+                    messageInput.focus();
+                    
+                    // Show phase indicator
+                    phaseIndicator.style.display = 'block';
+                    phaseIndicator.textContent = 'Phase: Introduction';
+                    
+                    // Clear chat and add AI's first message
+                    chatMessages.innerHTML = '';
+                    addMessage('ai', data.message);
+                    
+                } else {
+                    showError(data.error || 'Failed to start session');
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+            }
+        }
+
+        async function sendMessage(message) {
+            if (!sessionActive || !message.trim()) return;
+
+            // Add user message
+            addMessage('user', message);
+            
+            // Show typing indicator
+            showTyping();
+            
+            // Disable input while processing
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+
+            try {
+                const response = await fetch('/send_message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+                
+                // Hide typing indicator
+                hideTyping();
+                
+                if (data.success) {
+                    addMessage('ai', data.message);
+                    
+                    // Update phase indicator
+                    if (data.phase) {
+                        phaseIndicator.textContent = `Phase: ${data.phase.replace('_', ' ').toUpperCase()}`;
+                    }
+                    
+                    if (data.session_ended) {
+                        endSession();
+                        return;
+                    }
+                    
+                    // Re-enable input
+                    messageInput.disabled = false;
+                    sendBtn.disabled = false;
+                    messageInput.focus();
+                    
+                } else {
+                    showError(data.error || 'Failed to send message');
+                    
+                    // Re-enable input on error
+                    messageInput.disabled = false;
+                    sendBtn.disabled = false;
+                }
+            } catch (error) {
+                hideTyping();
+                showError('Network error: ' + error.message);
+                
+                // Re-enable input on error
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+            }
+        }
+
+        function addMessage(sender, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.textContent = sender === 'user' ? 'You' : 'AI';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // Check if this is a CBT formulation
+            const isFormulation = sender === 'ai' && (
+                content.includes('**Formulation:**') || 
+                content.includes('CBT formulation') ||
+                content.includes('Assessment Questions:') ||
+                content.includes('Target Areas for Change:') ||
+                content.includes('Key Automatic Thoughts:') ||
+                content.includes('Formulation Conclusion:') ||
+                content.toLowerCase().includes('based on everything you\'ve shared') ||
+                content.toLowerCase().includes('based on our structured cbt assessment')
+            );
+            
+            if (isFormulation) {
+                contentDiv.className += ' formulation';
+                
+                // Add formulation header
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'formulation-header';
+                headerDiv.innerHTML = `
+                    <div class="formulation-title">📝 Comprehensive CBT Formulation</div>
+                    <div class="formulation-subtitle">Cognitive Behavioral Assessment Summary</div>
+                `;
+                contentDiv.appendChild(headerDiv);
+                
+                // Process and enhance the markdown content
+                let processedContent = content;
+                
+                // Enhanced section detection and styling
+                processedContent = processedContent.replace(
+                    /(\*\*Key Automatic Thoughts:\*\*[\s\S]*?)(?=\*\*[^*]|\n\n|$)/g,
+                    '<div class="section-thoughts">$1</div>'
+                );
+                
+                processedContent = processedContent.replace(
+                    /(\*\*Key Emotional and Physical Responses:\*\*[\s\S]*?)(?=\*\*[^*]|\n\n|$)/g,
+                    '<div class="section-emotions">$1</div>'
+                );
+                
+                processedContent = processedContent.replace(
+                    /(\*\*.*[Bb]ehavior.*:\*\*[\s\S]*?)(?=\*\*[^*]|\n\n|$)/g,
+                    '<div class="section-behaviors">$1</div>'
+                );
+                
+                processedContent = processedContent.replace(
+                    /(\*\*.*[Pp]attern.*:\*\*[\s\S]*?)(?=\*\*[^*]|\n\n|$)/g,
+                    '<div class="section-patterns">$1</div>'
+                );
+                
+                // Enhanced pathways section styling
+                processedContent = processedContent.replace(
+                    /(\*\*.*[Pp]otential\s+[Pp]athways.*:\*\*[\s\S]*?)(?=\*\*[^*]|\n\n|$)/g,
+                    '<div class="section-pathways">$1</div>'
+                );
+                
+                // Parse markdown and add to content
+                const contentElement = document.createElement('div');
+                contentElement.innerHTML = marked.parse(processedContent);
+                contentDiv.appendChild(contentElement);
+                
+            } else {
+                // Regular message - check for markdown and parse it
+                if (sender === 'ai' && content.includes('**')) {
+                    // AI message with markdown formatting (personalization)
+                    console.log('Parsing markdown for AI message:', content);
+                    try {
+                        contentDiv.innerHTML = marked.parse(content);
+                        console.log('Successfully parsed markdown');
+                    } catch (error) {
+                        console.error('Markdown parsing failed:', error);
+                        contentDiv.textContent = content;
+                    }
+                } else {
+                    // Plain text message
+                    contentDiv.textContent = content;
+                }
+            }
+            
+            if (sender === 'user') {
+                messageDiv.appendChild(contentDiv);
+                messageDiv.appendChild(avatar);
+            } else {
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(contentDiv);
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function showTyping() {
+            typingIndicator.style.display = 'flex';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function hideTyping() {
+            typingIndicator.style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            chatMessages.appendChild(errorDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function endSession() {
+            sessionActive = false;
+            
+            // Disable input
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            
+            // Hide phase indicator
+            phaseIndicator.style.display = 'none';
+            
+            // Show download container
+            downloadContainer.style.display = 'block';
+            
+            // Show session selector again
+            sessionSelector.style.display = 'flex';
+            
+            // Add restart message
+            addMessage('ai', 'Session completed! You can download your conversation report or start a new session.');
+        }
+
+        // Event listeners
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+            if (message) {
+                sendMessage(message);
+                messageInput.value = '';
+            }
+        });
+
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+
+        // Download functionality
+        downloadBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.open('/download_report', '_blank');
+        });
+
+        downloadClose.addEventListener('click', () => {
+            downloadContainer.style.display = 'none';
+        });
+
+        // Focus input when page loads
+        window.addEventListener('load', () => {
+            messageInput.focus();
+        });
+    </script>
+</body>
+</html> 

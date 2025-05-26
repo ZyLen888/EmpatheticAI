@@ -7,3 +7,4 @@ __pycache__/
 .DS_Store
 
 cbt_chatbot.db
+tests/

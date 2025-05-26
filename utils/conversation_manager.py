@@ -55,6 +55,11 @@ class ConversationManager:
         """Use AI to create natural variations of the structured questions"""
         import ollama
         
+        # Store original bold content for restoration if needed
+        import re
+        bold_pattern = r'\*\*(.*?)\*\*'
+        bold_matches = re.findall(bold_pattern, base_question)
+        
         # Define the purpose and constraints for each phase type
         phase_contexts = {
             'introduction': "building initial rapport and understanding presenting concerns",
@@ -81,18 +86,32 @@ class ConversationManager:
         
         context = phase_contexts.get(phase_type, "conducting CBT assessment")
         
+        # Enhanced rephrase prompt with stronger emphasis on preserving bold formatting
         rephrase_prompt = f"""You are a CBT therapist creating natural question variations for a structured assessment.
 
 Base question: "{base_question}"
 
 Context: You are {context} during a CBT assessment.
 
-Create a natural, conversational variation of this question that:
+CRITICAL FORMATTING RULES:
+- The base question contains **bold text** that represents PERSONALIZED MEMORY RETRIEVAL
+- You MUST preserve ALL **bold formatting markers** EXACTLY as they appear
+- The bold text shows what the AI "remembers" about the user - this is crucial for the study
+- DO NOT remove, modify, or rephrase any content inside **bold markers**
+- Keep the exact same bold text but you can rephrase the surrounding words
+
+Create a natural, conversational variation that:
 - Maintains the exact same clinical purpose and information gathering goal
 - Sounds warm, professional, and therapeutic
-- Uses slightly different wording but asks for the same information
+- Uses slightly different wording for non-bold text only
+- PRESERVES every single **bold marker** and its content exactly
 - Keeps the same level of specificity and detail
 - Maintains appropriate therapeutic boundaries
+
+EXAMPLE:
+Original: "I remember you mentioned **eating late at night**. What specific thoughts went through your mind?"
+Good rephrase: "I recall you sharing about **eating late at night**. What thoughts were you having in that moment?"
+Bad rephrase: "I remember your nighttime eating habits. What thoughts occurred?" (bold markers removed!)
 
 Provide ONLY the rephrased question, nothing else."""
 
@@ -109,9 +128,37 @@ Provide ONLY the rephrased question, nothing else."""
             # Clean up any quotation marks or extra formatting
             rephrased = rephrased.strip('"').strip("'").strip()
             
-            # Fallback to original if rephrasing fails or is too short
-            if len(rephrased) < 20 or len(rephrased) > len(base_question) * 2:
+            # Check if bold formatting was preserved
+            rephrased_bold_matches = re.findall(bold_pattern, rephrased)
+            
+            # If bold content was lost, restore it using post-processing
+            if bold_matches and len(rephrased_bold_matches) < len(bold_matches):
+                print(f"⚠️  Bold formatting partially lost during rephrasing. Attempting restoration...")
+                
+                # Try to restore bold formatting by finding the content in the rephrased text
+                restored_text = rephrased
+                for original_bold in bold_matches:
+                    # Look for the content without bold markers in the rephrased text
+                    if original_bold in restored_text and f"**{original_bold}**" not in restored_text:
+                        # Replace the plain text with bold version
+                        restored_text = restored_text.replace(original_bold, f"**{original_bold}**")
+                        print(f"   Restored bold formatting for: {original_bold}")
+                
+                rephrased = restored_text
+            
+            # Final verification
+            final_bold_matches = re.findall(bold_pattern, rephrased)
+            if bold_matches and len(final_bold_matches) == 0:
+                print(f"❌ Bold formatting completely lost. Using original question.")
                 return base_question
+            
+            # Fallback to original if rephrasing fails or is too short
+            if len(rephrased) < 20 or len(rephrased) > len(base_question) * 2.5:
+                return base_question
+                
+            # Success - log if bold formatting was preserved
+            if bold_matches and len(final_bold_matches) >= len(bold_matches):
+                print(f"✅ Bold formatting preserved in rephrased question")
                 
             return rephrased
             
@@ -182,74 +229,135 @@ Provide ONLY the rephrased question, nothing else."""
             .order_by(BackgroundInfo.updated_at.desc())\
             .first()
         
-        # Build personalization context
+        # Build MUCH MORE OBVIOUS personalization context with explicit memory language
         personalization_context = ""
+        memory_references = []
         
-        if phase == 'situation_2' and recent_situations:
-            # Reference first situation when asking for second
+        if phase == 'introduction' and background and background.chief_complaint:
+            # Reference any previous concerns from database
+            prev_concern = background.chief_complaint[:100]
+            personalization_context = f"I remember from our previous conversations that you've dealt with **{prev_concern}**. "
+            memory_references.append(f"Previous concern: {prev_concern}")
+            
+        elif phase == 'situation_1' and recent_situations:
+            # Reference any similar past situations
             prev_situation = recent_situations[0].description[:80]
-            personalization_context = f"Earlier you mentioned '{prev_situation}'. "
+            personalization_context = f"I recall you previously shared about **{prev_situation}**. Building on what I know about your experiences, "
+            memory_references.append(f"Past situation: {prev_situation}")
+            
+        elif phase == 'situation_2' and recent_situations:
+            # Much more explicit memory reference
+            prev_situation = recent_situations[0].description[:80]
+            personalization_context = f"I'm looking back at what you told me earlier about **{prev_situation}**. From my memory of your experiences, "
+            memory_references.append(f"Earlier situation: {prev_situation}")
             
         elif phase == 'situation_3' and len(recent_situations) >= 2:
-            # Reference previous situations when asking for third
+            # Very obvious reference to multiple past situations
             prev_sit1 = recent_situations[1].description[:60]
             prev_sit2 = recent_situations[0].description[:60]
-            personalization_context = f"You've shared situations involving '{prev_sit1}' and '{prev_sit2}'. "
+            personalization_context = f"I've been reflecting on the patterns I remember from your previous sharing - specifically **{prev_sit1}** and **{prev_sit2}**. Based on what's stored in my memory about your experiences, "
+            memory_references.append(f"Pattern 1: {prev_sit1}")
+            memory_references.append(f"Pattern 2: {prev_sit2}")
             
         elif 'thoughts' in phase and recent_thoughts:
-            # Reference previous thought patterns
+            # Explicit memory retrieval language for thoughts
             situation_num = phase.split('_')[1]
-            if situation_num == '2' and len(recent_thoughts) >= 1:
+            if situation_num == '1' and recent_thoughts:
                 prev_thought = recent_thoughts[0].thought[:80]
-                personalization_context = f"In your previous situation, you mentioned thinking '{prev_thought}'. "
+                personalization_context = f"I remember you sharing thoughts like **'{prev_thought}'** in the past. Drawing from what I know about your thinking patterns, "
+                memory_references.append(f"Past thought pattern: {prev_thought}")
+            elif situation_num == '2' and len(recent_thoughts) >= 1:
+                prev_thought = recent_thoughts[0].thought[:80]
+                personalization_context = f"Looking back at my records, I recall you had thoughts about **'{prev_thought}'** in your previous situation. Connecting this to what I know about you, "
+                memory_references.append(f"Previous thought: {prev_thought}")
             elif situation_num == '3' and len(recent_thoughts) >= 2:
                 prev_thought1 = recent_thoughts[1].thought[:60]
                 prev_thought2 = recent_thoughts[0].thought[:60]
-                personalization_context = f"I notice you've had thoughts like '{prev_thought1}' and '{prev_thought2}'. "
+                personalization_context = f"I've been tracking your thought patterns and I remember you expressing **'{prev_thought1}'** and **'{prev_thought2}'**. Based on these patterns I've observed about you, "
+                memory_references.append(f"Thought pattern A: {prev_thought1}")
+                memory_references.append(f"Thought pattern B: {prev_thought2}")
                 
         elif 'emotions' in phase and recent_emotions:
-            # Reference previous emotional patterns
+            # Very explicit emotional memory references
             situation_num = phase.split('_')[1]
-            if situation_num == '2' and len(recent_emotions) >= 1:
+            if situation_num == '1' and recent_emotions:
                 prev_emotion = recent_emotions[0].emotion[:80]
-                personalization_context = f"Previously you felt '{prev_emotion}'. "
+                personalization_context = f"I remember from our previous sessions that you experienced **'{prev_emotion}'**. Given what I know about your emotional responses, "
+                memory_references.append(f"Past emotional response: {prev_emotion}")
+            elif situation_num == '2' and len(recent_emotions) >= 1:
+                prev_emotion = recent_emotions[0].emotion[:80]
+                personalization_context = f"I'm recalling that you previously felt **'{prev_emotion}'**. From what's documented about your emotional patterns, "
+                memory_references.append(f"Previous emotion: {prev_emotion}")
             elif situation_num == '3' and len(recent_emotions) >= 2:
                 prev_em1 = recent_emotions[1].emotion[:60]
                 prev_em2 = recent_emotions[0].emotion[:60]
-                personalization_context = f"I've noticed you experience feelings like '{prev_em1}' and '{prev_em2}'. "
+                personalization_context = f"Looking through my memory of your emotional responses, I see you've experienced **'{prev_em1}'** and **'{prev_em2}'**. Based on this emotional history I have about you, "
+                memory_references.append(f"Emotion A: {prev_em1}")
+                memory_references.append(f"Emotion B: {prev_em2}")
                 
         elif 'behavior' in phase and recent_behaviors:
-            # Reference previous behavioral patterns
+            # Explicit behavioral memory references
             situation_num = phase.split('_')[1]
-            if situation_num == '2' and len(recent_behaviors) >= 1:
+            if situation_num == '1' and recent_behaviors:
                 prev_behavior = recent_behaviors[0].action[:80]
-                personalization_context = f"Before, you responded by '{prev_behavior}'. "
+                personalization_context = f"I remember from your past sharing that you responded by **'{prev_behavior}'**. Considering what I know about your coping behaviors, "
+                memory_references.append(f"Past behavior: {prev_behavior}")
+            elif situation_num == '2' and len(recent_behaviors) >= 1:
+                prev_behavior = recent_behaviors[0].action[:80]
+                personalization_context = f"Looking back at my records, I recall you previously responded by **'{prev_behavior}'**. Drawing from what I've learned about your behavioral patterns, "
+                memory_references.append(f"Previous behavior: {prev_behavior}")
             elif situation_num == '3' and len(recent_behaviors) >= 2:
                 prev_beh1 = recent_behaviors[1].action[:60]
                 prev_beh2 = recent_behaviors[0].action[:60]
-                personalization_context = f"I see you've responded by '{prev_beh1}' and '{prev_beh2}' in similar situations. "
+                personalization_context = f"From my memory of your responses, I've documented that you've reacted by **'{prev_beh1}'** and **'{prev_beh2}'**. Based on these behavioral patterns I've observed in you, "
+                memory_references.append(f"Behavior pattern A: {prev_beh1}")
+                memory_references.append(f"Behavior pattern B: {prev_beh2}")
                 
-        elif phase == 'patterns_beliefs' and (recent_situations or background):
-            # Reference overall patterns for final phase
+        elif phase == 'patterns_beliefs':
+            # Comprehensive memory reference for final phase
             patterns = []
+            memory_items = []
+            
             if background and background.stress_response_patterns:
-                patterns.append(f"stress response patterns you've shown")
+                patterns.append(f"**stress response patterns I've documented about you**")
+                memory_items.append(f"Stress patterns: {background.stress_response_patterns[:60]}")
+                
             if len(recent_situations) >= 2:
-                categories = [s.category for s in recent_situations[:2] if s.category]
-                if categories:
-                    patterns.append(f"situations involving {' and '.join(categories)}")
+                categories = [s.description[:40] for s in recent_situations[:2]]
+                patterns.append(f"**situations involving '{categories[0]}' and '{categories[1]}' that I remember you sharing**")
+                memory_items.extend([f"Situation memory: {cat}" for cat in categories])
+            
+            if recent_thoughts:
+                thought_sample = recent_thoughts[0].thought[:60]
+                patterns.append(f"**thought patterns like '{thought_sample}' that I've recorded from you**")
+                memory_items.append(f"Thought memory: {thought_sample}")
             
             if patterns:
-                personalization_context = f"Looking at the {' and '.join(patterns)} we've discussed, "
+                personalization_context = f"I've been reflecting on everything I remember about you - the {', '.join(patterns)} we've discussed together. Looking through my comprehensive memory of your experiences, "
+                memory_references.extend(memory_items)
         
         # Combine personalization with base question
-        if personalization_context:
+        if personalization_context and memory_references:
+            # Terminal logging for researcher with detailed memory retrieval info
+            print(f"🧠 STRONG PERSONALIZATION APPLIED - Phase: {phase}")
+            print(f"   Memory Context: {personalization_context.strip()}")
+            for ref in memory_references:
+                print(f"   Database Reference: {ref}")
+            print("   =" * 50)
+            
+            # Create the fully personalized question
             personalized_question = personalization_context + base_question.lower()
             # Capitalize first letter after context
             if len(personalized_question) > len(personalization_context):
                 personalized_question = personalization_context + base_question[0].upper() + base_question[1:]
+            
+            # Store the memory references for later bold formatting
+            self._current_memory_references = memory_references
+            
             return personalized_question
         
+        # No personalization available
+        self._current_memory_references = []
         return base_question
         
     def get_contextual_starter(self):
@@ -275,10 +383,15 @@ Provide ONLY the rephrased question, nothing else."""
         # Apply personalization (references to previous database information)
         personalized_question = self._get_personalized_question(base_question, phase)
         
-        # Use AI to create natural variation
-        varied_question = self._rephrase_question_with_ai(personalized_question, phase)
-        
-        return varied_question
+        # CRITICAL FIX: Only use AI rephrasing if there's no bold formatting to preserve
+        # Check if personalized question contains bold markers
+        if '**' in personalized_question:
+            # Personalized question with memory references - don't rephrase to preserve bold formatting
+            return personalized_question
+        else:
+            # No personalization or no bold formatting - safe to rephrase
+            varied_question = self._rephrase_question_with_ai(personalized_question, phase)
+            return varied_question
 
     def get_contextual_starter_without_personalization(self):
         """Get pure CBT questions without any personalization/database references"""
@@ -737,12 +850,28 @@ SITUATIONS EXPLORED:
 CRITICAL INSTRUCTIONS:
 - Use ONLY the data provided in the user message - do NOT add generic examples
 - Focus on the ACTUAL situations, thoughts, emotions, and behaviors described
-- Do NOT use generic CBT templates or create fictional examples
+- DO NOT use generic CBT templates or create fictional examples
 - The user's specific presenting concern is: {presenting_concern}
 - Reference the exact situations involving: {themes_text}
 - Address the specific thought patterns: {thought_patterns_text}
 - DO NOT mention anything not specifically discussed in the provided data
 - Base your formulation entirely on what the user actually shared
+
+FORMAT YOUR RESPONSE WITH MARKDOWN:
+- Use **bold headers** for section titles
+- Use bullet points (*) for lists
+- Use proper paragraphs with line breaks
+- Structure it professionally with clear sections
+
+REQUIRED SECTIONS:
+1. **Presenting Concerns** - What brought them here
+2. **Situational Triggers** - The specific situations they described
+3. **Maladaptive Thoughts** - The actual thought patterns they shared
+4. **Emotional and Physical Responses** - Their specific emotional/physical reactions
+5. **Behavioral Patterns** - The actual behaviors they described
+6. **Potential Pathways for Exploration** - 3 specific, actionable areas for therapeutic work based ONLY on their actual data
+
+The final section should provide 3 concrete therapeutic directions that directly address their specific patterns, situations, and concerns as documented in the assessment.
 
 Create a CBT formulation that directly addresses the user's actual experiences as documented in the assessment data."""
 
@@ -756,6 +885,9 @@ Create a CBT formulation that directly addresses the user's actual experiences a
             )
             
             formulation = response['message']['content'].strip()
+            
+            # Clean up any quotation marks for consistency
+            formulation = formulation.strip('"').strip("'").strip()
             
             # Save the formulation
             self.save_cbt_beliefs(formulation)

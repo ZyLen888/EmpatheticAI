@@ -100,60 +100,10 @@ def run_chat():
                 next_question = conversation_manager.get_contextual_starter()
                 
                 if next_question:
-                    # Generate AI response with natural framing
-                    phase = conversation_manager.get_current_collection_phase()
+                    # CRITICAL FIX: Use the personalized question directly 
+                    # Don't overwrite with additional AI framing - it destroys the bold formatting!
+                    ai_response = next_question
                     
-                    if phase == 'introduction':
-                        framing_prompt = f"""The user shared their presenting concern: "{user_input}"
-
-You need to naturally deliver this question: "{next_question}"
-
-CRITICAL RULES:
-- Create ONE flowing response that briefly acknowledges their concern and naturally leads into the question
-- Don't separate acknowledgment and question - blend them together smoothly
-- Keep it warm, empathetic, and professional
-- Total response should be 30-50 words as ONE complete statement"""
-                    
-                    elif phase == 'cbt_assessment':
-                        framing_prompt = f"""The user responded: "{user_input}"
-
-You need to naturally ask this question: "{next_question}"
-
-CRITICAL RULES:
-- Create ONE flowing response that briefly acknowledges what they shared and naturally transitions to the question
-- Don't separate acknowledgment and question - make it one smooth statement
-- Keep it therapeutic and supportive
-- Total response should be 25-45 words as ONE complete statement"""
-                    
-                    elif phase == 'patterns_beliefs':
-                        framing_prompt = f"""The user shared: "{user_input}"
-
-You need to ask: "{next_question}"
-
-CRITICAL RULES:
-- Create ONE flowing response that acknowledges their insights and naturally leads into the question
-- Don't separate acknowledgment and question - blend them together
-- Keep it thoughtful and encouraging
-- Total response should be 40-60 words as ONE complete statement"""
-                    
-                    else:
-                        framing_prompt = f"""The user responded: "{user_input}"
-
-You need to ask: "{next_question}"
-
-Create ONE natural, flowing response that incorporates the question smoothly."""
-
-                    system_prompt = conversation_manager.format_system_prompt(base_prompt)
-                    
-                    response = ollama.chat(
-                        model="llama3.2",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": framing_prompt}
-                        ]
-                    )
-                    
-                    ai_response = response['message']['content']
                     print(f"\nAI > {ai_response}\n")
                     
                     context = cbt_memory.get_context_for_conversation()
