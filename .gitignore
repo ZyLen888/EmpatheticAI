@@ -5,3 +5,5 @@ __pycache__/
 *.pyd
 .env
 .DS_Store
+
+cbt_chatbot.db
